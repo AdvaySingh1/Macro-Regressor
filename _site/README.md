@@ -52,7 +52,7 @@ Here's a sample of the resulting Dataframe
 
 
 | name                           |   calories |   sugar |   sodium |   protein |   carbohydrates |    fat |   saturated fat |   n_ingredients |   n_steps | ingredients                                                          | tags                                                                      |
-|:-------------------------------|-----------:|--------:|---------:|----------:|----------------:|-------:|----------------:|----------------:|----------:|:---------------------------------------------------------------------|:--------------------------------------------------------------------------|
+|:-------------------------------|:-----------|:--------|---------:|----------:|----------------:|-------:|----------------:|----------------:|----------:|---------------------------------------------------------------------:|--------------------------------------------------------------------------:|
 | dirty sriracha bloody mary     |      24    |     9   |      299 |       0.5 |             5.5 |   0    |             0   |               8 |         5 | ['celery salt', 'fresh lemon juice', 'horseradish', 'olive juice', 'sriracha sauce', 'tomato juice', 'vodka', 'worcestershire sauce']     | ['15-minutes-or-less', '3-steps-or-less', 'beverages', 'cocktails', 'course', 'easy', 'for-1-or-2', 'main-ingredient', 'number-of-servings', 'preparation', 'time-to-make', 'tomatoes', 'vegetables']                                  |
 | rolachi                        |     451.74 |    31   |      828 |      26   |            22   |  28.86 |             7.6 |               8 |        10 | ['green peppers', 'ground beef', 'onion', 'pepper', 'salad oil', 'salt', 'stewed tomatoes', 'zucchini']                                       | ['3-steps-or-less', '30-minutes-or-less', 'beef', 'easy', 'ground-beef', 'main-ingredient', 'meat', 'preparation', 'time-to-make']                   |
 | peanut butter truffle cupcakes |    5060.14 |   538.5 |     2898 |      89   |           374   | 356.46 |           157.8 |              14 |        20 | ['baking cocoa', 'baking soda', 'brewed coffee', 'butter', 'buttermilk', 'creamy peanut butter', 'eggs', 'flour', 'heavy whipping cream', 'salt', 'semisweet chocolate', 'sugar', 'vanilla', 'white baking chocolate']   | ['60-minutes-or-less', 'baking', 'cake-fillings-and-frostings', 'cakes', 'course', 'cupcakes', 'desserts', 'equipment', 'oven', 'preparation', 'time-to-make']    |
@@ -243,5 +243,64 @@ Secondly, the `n_ingredients` and `n_steps` features don't have a high $$R^2$$ v
 ## Final Model
 In the final model, we will make use of sklearn's **GridSearchCV** class. This way, we will **cross validate** while training to reduce overfitting, allowing our training MSE to more closely match our testing MSE. Additionally, we'll also experiment with different hyperparams such as the punishment coefficient for Lasso and the polynomial features for each of the numerical features. Aside from that, we'll be adding the top $$20$$ most popular tags and ingredients. After the top $$20@$$, their proportions get too small to be able to adequetly train the Lasso model and would simply introduce noice. Addtionally, while this approach may not gurantee that soley the best features are being used to train each model, different features may be useful for different macros. One of the goals of this project is interpretability. After creating the model, we are able to interpret the parameters to determine which features were of service to which macros.
 ### Results
+The following are the MSE of the test sets.
 
+|    Macro      |     Test MSE |
+|:--------------|-----------------:|
+| calories      | 418557           |
+| fat           |   2144.63        |
+| sugar         |  13047.8         |
+| sodium        |      1.4756700.1 |
+| protein       |    566.39        |
+| saturated fat |    204.198       |
+| carbohydrates |   5490.71        |
+
+As can be see, there's a significant decrease in the MSE for `protein` from the baseline model. The training MSEs are also lesser with the protein training MSE being $$405.1$$$.
+
+The following are the optimal hyperparams for each of the models.
+
+|                             |   calories |    fat |   sugar |   sodium |   protein |   saturated fat |   carbohydrates |
+|:----------------------------|-----------:|-------:|--------:|---------:|----------:|----------------:|----------------:|
+| N_Steps Poly Features       |     2      | 2      |  2      |      3   |    1      |          2      |          2      |
+| N_Ingredients Poly Features |     2      | 2      |  3      |      2   |    1      |          2      |          2      |
+| Lassor regressor            |     0.0625 | 0.0625 |  0.0625 |      0.5 |    0.0625 |          0.0625 |          0.0625 |
+
+As can be seen, the polynomial features most most of the models are greather than 1, suggesting a non-linear relationship between said macros and the numerical features. The optimal punishment tends to be $$0.0625$$ for most of the values. 
+**Note** The range of the polynomial features exponent ranges from $$1$$ to $$4$$ and $$2^{-5}$$ to $$2^{4}$$ for something the Lasso punishment.
 #### Interpreting the Parameters
+Now, we are able to interpret the impact of adding each of the ingredients to the model. The following table is the meat tag coefficient. As expected, it's positive for `protein` and negative for `carbohydrates`. Take a look at the **Interesting Aggregates** section to see why.
+
+|   Macro       |   meat_tag coefficient |
+|:--------------|-----------:|
+| calories      |  115.549   |
+| fat           |    9.74835 |
+| sugar         |   -1.04353 |
+| sodium        |  251.082   |
+| protein       |   11.1625  |
+| saturated fat |    2.35439 |
+| carbohydrates |   -4.08609 |
+
+Now, if we were to specialize towards predicting the values of a certain macro, we can do so by selecting only the columns which provice any significant value.
+In the following, the **all_coefficients** dataframe represents the coefficient for each of the macros.<br>`all_coefficients[(all_coefficients['protein'] > 1) | (all_coefficients['protein'] < -1)]['protein']`<br>
+This singles out any important ingredient or tag! We get the following series:
+
+|      Feature         |   Protein (Grams) |
+|:-----------------------|----------:|
+| 15-minutes-or-less_tag |  -3.74627 |
+| 30-minutes-or-less_tag |  -2.27869 |
+| 60-minutes-or-less_tag |  -2.51325 |
+| baking powder_ing      |  -1.00415 |
+| baking soda_ing        |  -1.69974 |
+| course_tag             |  -5.9061  |
+| low-carb_tag           |   4.09764 |
+| main-dish_tag          |  10.6352  |
+| meat_tag               |  11.1625  |
+| n_ingredients          |   1.61722 |
+| n_steps                |   1.09601 |
+| sugar_ing              |  -2.62982 |
+| time-to-make_tag       |  -2.06129 |
+| vegetables_tag         |  -5.13664 |
+
+Hence, future Macro regressors can focus solely on one macro at a time and aim to increase the training time using only the features whch are of use. Additional research can be done, interpreting the parameters.
+
+Thank you!
